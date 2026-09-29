@@ -1,6 +1,12 @@
 # LM_ini_parser_v2
 simple homemade ini parser written in C++
 
+# Mechanism
+On instantiation of LM_ini_parser, all the data from the ini file will be read and processed. The result is that any procession that can prove heavy is only done once.
+ * LM_ini_parser reads the raw data of the ini file through std::ifstream
+ * The raw data is broken down into parts defined by the sections, which will be fed to ini_section class
+ * ini_section class breaks down the per-section raw data into parts which define key-value pairs, which are fed into ini_key class
+
 # Intergration
 Step 1: Instantiate an LM_ini_parser object<br>
 Step 2: 
