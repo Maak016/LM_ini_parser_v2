@@ -1,5 +1,5 @@
 # LM_ini_parser_v2
-simple homemade ini parser written in C++
+simple homemade ini parser written in C++. Where is v1, you may ask? I don't know:D
 
 # How LM_ini_parser works
 On instantiation of LM_ini_parser, all the data from the ini file will be read and processed. The result is that any procession that can prove heavy is only done once.
