@@ -15,6 +15,9 @@ On instantiation of LM_ini_writer, a copy of the content of a read file is made.
  * In writing, parse_written_data is called in each ini_section_writer. and then parse_written_data in LM_ini_writer puts the written data parsed from each ini_section_writer together.
 
 # Intergration
+To include the library in your project. You only need include/LM_ini_parser.h and src/LM_ini_parser.cpp. include LM_ini_parser.h in your project and you will be up and running!
+
+# How to use library
 Step 1: Instantiate an LM_ini_parser object OR LM_ini_writer object<br>
 Step 2: 
   * To Read file: use LM_ini_parser::get() to Read a key from the ini file. The first argument is what section the key is in, the second what the key name is.
