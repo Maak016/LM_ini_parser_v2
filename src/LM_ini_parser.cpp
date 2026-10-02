@@ -2,13 +2,21 @@
 
 //Table of content:
 //- ini_key class
-//- ini_section class
+//- ini_section_reader class
 //- LM_ini_parser class
+//- ini_section_writer class
+//- LM_ini_writer class
 //- util class
 
 ///
 // ini_key class space
 ///
+
+string ini_key::convert_data_to_raw_line(const string key_name, const string key_value) {
+	if (key_name.empty() || key_value.empty()) return "";
+
+	return key_name + "=" + key_value;
+}
 
 int ini_key::get_equal_sign_index(const string raw_line_data) {
 	for (int i = 0; i < raw_line_data.length(); i++) {
@@ -74,26 +82,26 @@ string ini_key::get_val() {
 }
 
 ///
-// ini_section class space
+// ini_section_reader class space
 ///
 
-ini_section::ini_section(const string raw_section_data) {
+ini_section_reader::ini_section_reader(const string raw_section_data) {
 	this->process_attributes(raw_section_data);
 }
 
-void ini_section::process_attributes(const string raw_section_data) {
+void ini_section_reader::process_attributes(const string raw_section_data) {
 	this->raw_section_data = raw_section_data;
 
 	this->parse_section_name();
 	this->parse_keys_in_section();
 }
 
-void ini_section::parse_section_name() {
+void ini_section_reader::parse_section_name() {
 	int closing_bracket_idx = 0;
 	this->section_name = util::read_until_char(this->raw_section_data, ']', closing_bracket_idx);
 }
 
-void ini_section::parse_keys_in_section() {
+void ini_section_reader::parse_keys_in_section() {
 	string line_data   = "";
 	int	   current_idx = 0;
 
@@ -106,7 +114,7 @@ void ini_section::parse_keys_in_section() {
 	}
 }
 
-string ini_section::get_ini_key_val(const string key_name) {
+string ini_section_reader::get_ini_key_val(const string key_name) {
 	for (auto& key : this->keys_in_section) {
 		if (key.get_key() == key_name) return key.get_val();
 	}
@@ -114,8 +122,12 @@ string ini_section::get_ini_key_val(const string key_name) {
 	return "";
 }
 
-string ini_section::get_section_name() {
+string ini_section_reader::get_section_name() {
 	return this->section_name;
+}
+
+vector<ini_key> ini_section_reader::get_keys_in_section() {
+	return this->keys_in_section;
 }
 
 
@@ -138,20 +150,11 @@ void LM_ini_parser::process_attributes(filesystem::path file_path) {
 }
 
 void LM_ini_parser::parse_raw_file_data() {
-	std::ifstream input_file(this->file_path);
+	string raw_file_data = "";
 
-	if (!input_file.is_open()) {
-		std::cerr << "LM_ini_parser_v2 error: Failed to open ini file in " << this->file_path << std::endl;
-		return;
-	}
+	if (!util::read_from_file(&raw_file_data, this->file_path)) return;
 
-	std::stringstream data_stream;
-	data_stream << input_file.rdbuf();
-
-	this->raw_file_data = data_stream.str();
-
-	data_stream.clear();
-	input_file.close();
+	this->raw_file_data = raw_file_data;
 }
 
 void LM_ini_parser::parse_sections_in_file() {
@@ -167,9 +170,13 @@ void LM_ini_parser::iterate_single_section(int idx_in_raw_data) {
 	idx_in_raw_data++;
 	string next_section = util::read_until_char(this->raw_file_data, '[', idx_in_raw_data);
 
-	this->sections_in_file.push_back(ini_section(next_section));
+	this->sections_in_file.push_back(ini_section_reader(next_section));
 
 	this->iterate_single_section(idx_in_raw_data);
+}
+
+vector<ini_section_reader> LM_ini_parser::get_read_sections() {
+	return this->sections_in_file;
 }
 
 string LM_ini_parser::get(const string section_name, const string key_name) {
@@ -178,6 +185,156 @@ string LM_ini_parser::get(const string section_name, const string key_name) {
 	}
 
 	return "";
+}
+
+
+///
+// ini_section_writer class space
+///
+
+string ini_section_writer::get_header_line(const string section_name) {
+	if (section_name.empty()) return "";
+	return "[" + section_name + "]";
+}
+
+void ini_section_writer::append_key_to_written_data(string* buf, ini_key& key) {
+	if (buf->empty()) return;	//if the buf string is empty (meaning nothing has been written to it) the header containing the section name has not been written
+
+	*buf += '\n';
+
+	string written_line = key.get_key() + "=" + key.get_val();
+
+	*buf += written_line;
+}
+
+ini_section_writer::ini_section_writer(ini_section_reader* read_section) {
+	this->adapt_from_read_section(read_section);
+}
+
+ini_section_writer::ini_section_writer(string new_section_name) {
+	this->section_name = new_section_name;
+}
+
+void ini_section_writer::adapt_from_read_section(ini_section_reader* read_section) {
+	this->section_name = read_section->get_section_name();
+
+	vector<ini_key> keys_from_section = read_section->get_keys_in_section();
+
+	this->keys_in_section = keys_from_section;
+}
+
+void ini_section_writer::write_key(const string key_name, const string key_val) {
+	if (key_name.empty() || key_val.empty()) return;
+
+	string raw_string = ini_key::convert_data_to_raw_line(key_name, key_val);
+
+	if (this->get_key_index(key_name) != -1) {
+		this->keys_in_section[get_key_index(key_name)] = ini_key(raw_string);
+		return;
+	}
+
+	this->keys_in_section.push_back(ini_key(raw_string));
+}
+
+void ini_section_writer::parse_written_data() {
+	string written_data = "";
+
+	string header = ini_section_writer::get_header_line(this->section_name);
+
+	written_data += header;
+
+	for (auto& key : this->keys_in_section) {
+		this->append_key_to_written_data(&written_data, key);
+	}
+
+	this->written_data = written_data;
+}
+
+string ini_section_writer::get_written_data() {
+	return this->written_data;
+}
+
+string ini_section_writer::get_section_name() {
+	return this->section_name;
+}
+
+int ini_section_writer::get_key_index(const string key_name) {
+	for (int i = 0; i < this->keys_in_section.size(); i++) {
+		if (this->keys_in_section[i].get_key() == key_name) return i;
+	}
+	
+	return -1;
+}
+
+
+///
+// LM_ini_writer class space
+///
+
+void LM_ini_writer::append_section_to_written_data(string* buf, ini_section_writer& writer) {
+	*buf += '\n';
+
+	writer.parse_written_data();
+	*buf += writer.get_written_data();
+}
+
+LM_ini_writer::LM_ini_writer(filesystem::path file_path, LM_ini_parser* read_file) {
+	if (filesystem::is_directory(file_path)) return;
+
+	this->file_path = file_path.string();
+	
+	if (read_file) this->adapt_from_read_file(read_file);
+}
+
+void LM_ini_writer::adapt_from_read_file(LM_ini_parser* read_file) {
+	vector<ini_section_reader> sections_from_file = read_file->get_read_sections();
+
+	for (auto& read_section : sections_from_file) {
+		this->sections_in_file.push_back(ini_section_writer(&read_section));
+	}
+}
+
+void LM_ini_writer::add(const string section_name, const string key_name, const string key_val) {
+	if (this->get_section_index(section_name) == -1) {
+		this->add_section(section_name);
+	}
+
+	this->write_key(get_section_index(section_name), key_name, key_val);
+}
+
+void LM_ini_writer::add_section(const string section_name) {
+	this->sections_in_file.push_back(ini_section_writer(section_name));
+}
+
+void LM_ini_writer::write_key(const int section_index, const string key_name, const string key_val) {
+	ini_section_writer& instance = this->sections_in_file.at(section_index);
+
+	instance.write_key(key_name, key_val);
+}
+
+int LM_ini_writer::get_section_index(const string section_name) {
+	for (int i = 0; i < this->sections_in_file.size(); i++) {
+		if (sections_in_file[i].get_section_name() == section_name) return i;
+	}
+
+	return -1;
+}
+
+void LM_ini_writer::parse_written_data() {
+	string written_data = "";
+
+	for (auto& section : this->sections_in_file) {
+		this->append_section_to_written_data(&written_data, section);
+	}
+
+	this->written_data = written_data;
+}
+
+void LM_ini_writer::write() {
+	this->parse_written_data();
+
+	if (!util::write_to_file(this->file_path, this->written_data))
+		std::cerr << "LM_ini_parser_v2 error: Could not write data to ini file at " << this->file_path << std::endl;
 }
 
 
@@ -224,15 +381,49 @@ string util::trim_whitespace(const string& input) {
 	int first_valid_idx = 0;
 	int last_valid_idx = input.length() - 1;
 
-	for (int i = first_valid_idx; i < input.length(); i++) {
+	for (int& i = first_valid_idx; i < input.length(); i++) {
 		if (!util::is_whitespace(input[i])) break;
 	}
 
-	for (int i = last_valid_idx; i >= 0; i--) {
+	for (int& i = last_valid_idx; i >= 0; i--) {
 		if (!util::is_whitespace(input[i])) break;
 	}
 
 	trim_result = trim_result.substr(first_valid_idx, (last_valid_idx - first_valid_idx) + 1);
 
 	return trim_result;
+}
+
+bool util::write_to_file(const string file_path, const string& write_data) {
+	std::ofstream output_file(file_path);
+
+	if (!output_file.is_open()) {
+		std::cerr << "LM_ini_parser_v2 error: Failed to open ini file in " << file_path << std::endl;
+		return false;
+	}
+
+	output_file << write_data;
+
+	output_file.close();
+
+	return true;
+}
+
+bool util::read_from_file(string* output, const string file_path) {
+	std::ifstream input_file(file_path);
+
+	if (!input_file.is_open()) {
+		std::cerr << "LM_ini_parser_v2 error: Failed to open ini file in " << file_path << std::endl;
+		return false;;
+	}
+
+	std::stringstream data_stream;
+	data_stream << input_file.rdbuf();
+
+	*output = data_stream.str();
+
+	data_stream.clear();
+	input_file.close();
+
+	return true;
 }

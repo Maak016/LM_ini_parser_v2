@@ -1,2 +1,3 @@
-﻿  impl_example.cpp
+﻿  LM_ini_parser.cpp
+C:\Personal\Visual Studio projects\LM_ini_parser_v2\LM_ini_parser_v2\src\LM_ini_parser.cpp(382,21): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
   LM_ini_parser_v2.vcxproj -> C:\Personal\Visual Studio projects\LM_ini_parser_v2\x64\Debug\LM_ini_parser_v2.exe
